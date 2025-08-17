@@ -11,18 +11,18 @@ from rclpy.qos import QoSProfile
 import matplotlib.pyplot as plt
 import pandas as pd
 
-BURGER_MAX_LIN_VEL = .22
+BURGER_MAX_LIN_VEL = 0.22
 BURGER_MAX_ANG_VEL = 2.84
 LIN_VEL_STEP_SIZE = .1
 ANG_VEL_STEP_SIZE = 1
 
-kp_lin = 0.01
+kp_lin = 0.0
 ki_lin = 0.0
 kd_lin = 0.0
 
-kp_ang = 0.150
-ki_ang = 0.0
-kd_ang = 0.0
+kp_ang = 0.5
+ki_ang = 0.005
+kd_ang = 1.0
 
 integral_lin = 0
 prev_error_lin = 0
@@ -31,7 +31,7 @@ integral_ang = 0
 prev_error_ang = 0
 
 x = 0
-y = .75
+y = 0
 theta = 0
 
 coords=[[],[]]
@@ -39,8 +39,13 @@ coords=[[],[]]
 def odometry_callback(msg:Odometry):
     global x,y,theta
     x = round(msg.pose.pose.position.x,5)
-    y = round(msg.pose.pose.position.y + .75,5)
-    theta = msg.pose.pose.orientation.z
+    y = round(msg.pose.pose.position.y,5)
+    
+    orientation = msg.pose.pose.orientation
+    siny_cosp = 2 * (orientation.w * orientation.z + orientation.x * orientation.y)
+    cosy_cosp = 1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z)
+    theta = math.atan2(siny_cosp,cosy_cosp)
+
     coords[0].append(x)
     coords[1].append(y)
     print("x: ",x,"    y: ",y,"    theta: ",theta)
@@ -107,27 +112,26 @@ def main():
 
         #print("Loop iteration: ",i)
         if i>0:
-            prev[0]=float(data[i-1][0])/1000
-            prev[1]=float(data[i-1][1])/1000
-        target[0]=float(data[i][0])/1000
-        target[1]=float(data[i][1])/1000
+            prev[0]=float(data[i-1][0])/1
+            prev[1]=float(data[i-1][1])/1
+        target[0]=float(data[i][0])/1
+        target[1]=float(data[i][1])/1
         #print(cords,prev)
         dy=round(target[1]-prev[1],3)
         dx=target[0]-prev[0]
         targs[0].append(target[0])
         targs[1].append(target[1])
 
-        if dx == 0:
-            target_lin_vel = 0
-        else:
-            target_lin_vel = (math.sqrt((dx*dx)+(dy*dy))) * 25
+        target_lin_vel = (math.sqrt((dx*dx)+(dy*dy))) / .06
         
         target_ang_vel=0
 
         """
         PID Tuining
         """
-        theta_d=math.atan2(target[1]-y,target[0]-x)
+
+        look_ahead_id = min(i+50, len(data)-1)
+        theta_d=math.atan2(float(data[look_ahead_id][1])/1-y,float(data[look_ahead_id][0])/1-x)
 
         ex = target[0] - x
         ey = target[1] - y
